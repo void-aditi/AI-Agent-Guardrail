@@ -7,3 +7,5 @@ guardrail-phase1/
 │   └── sandbox/              # a throwaway folder the tools operate on
 └── interceptor/
     └── graph.py              # the LangGraph graph + interception checkpoint
+
+This is an AI agent guardrail system, using Blockchain based Audit Trails.
