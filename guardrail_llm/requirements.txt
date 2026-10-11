@@ -1,0 +1,4 @@
+flask
+langgraph==1.2.14
+langchain-core
+langchain-ollama

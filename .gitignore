@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.pyc
+guardrail_llm/demo_agent/sandbox/
+*.log
+.env

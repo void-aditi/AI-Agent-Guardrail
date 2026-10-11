@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Agent Action Guardrail — LLM Live Demo</title>
+<style>
+  :root {
+    --navy: #10243d;
+    --navy2: #1b3a5c;
+    --teal: #1c7293;
+    --accent: #2ec4b6;
+    --amber: #f2a65a;
+    --red: #e4572e;
+    --green: #2ec4b6;
+    --bg: #0b1726;
+    --card: #132a45;
+    --text: #e8eef6;
+    --muted: #8fa3bd;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Calibri, Arial, sans-serif;
+    background: radial-gradient(circle at 80% -10%, #1b3a5c 0%, var(--bg) 55%);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 28px 36px 60px;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 26px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  h1 { margin: 0; font-size: 26px; letter-spacing: 0.3px; }
+  .subtitle { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+  }
+  #restartBtn {
+    background: var(--navy2);
+    color: var(--text);
+    padding: 10px 18px;
+    font-size: 13px;
+    border: 1px solid #2a4a70;
+  }
+  #restartBtn:hover { background: #22456b; }
+
+  /* Pipeline */
+  .pipeline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 30px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+  .stage {
+    flex: 1;
+    min-width: 170px;
+    background: var(--card);
+    border: 1px solid #22395a;
+    border-radius: 12px;
+    padding: 16px 14px;
+    text-align: center;
+    position: relative;
+    transition: all .35s ease;
+  }
+  .stage .icon { font-size: 22px; margin-bottom: 6px; }
+  .stage .label { font-size: 13px; font-weight: 700; }
+  .stage .sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .stage.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 0 22px rgba(46,196,182,0.45);
+    transform: translateY(-3px);
+  }
+  .stage.pass { border-color: var(--green); background: #10332f; }
+  .stage.block { border-color: var(--red); background: #3a1c16; }
+  .arrow { color: #3a5a82; font-size: 20px; flex: 0 0 auto; }
+
+  /* Main grid */
+  .grid {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 22px;
+  }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--card);
+    border: 1px solid #22395a;
+    border-radius: 14px;
+    padding: 20px 22px;
+  }
+  .panel h2 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--accent);
+    margin: 0 0 14px;
+  }
+
+  /* Action card */
+  #actionArea { min-height: 230px; display: flex; flex-direction: column; justify-content: center; }
+  .action-icon { font-size: 46px; text-align: center; margin-bottom: 6px; }
+  .action-tool { text-align: center; font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  .action-args { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 22px; font-family: 'Consolas', monospace; }
+  .risky-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 12px; margin-bottom: 10px; }
+  .risky-badge.risky { background: rgba(228,87,46,0.18); color: var(--red); border: 1px solid var(--red); }
+  .risky-badge.safe { background: rgba(46,196,182,0.15); color: var(--accent); border: 1px solid var(--accent); }
+
+  .btn-row { display: flex; gap: 14px; justify-content: center; }
+  .btn-row button { padding: 13px 30px; font-size: 15px; border-radius: 10px; }
+  #allowBtn { background: var(--accent); color: #06231f; }
+  #allowBtn:hover { background: #3fe0cf; }
+  #blockBtn { background: var(--red); color: white; }
+  #blockBtn:hover { background: #ff6a3d; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .done-box { text-align: center; }
+  .done-box .big { font-size: 42px; margin-bottom: 6px; }
+  .stat-row { display: flex; gap: 18px; justify-content: center; margin-top: 16px; }
+  .stat { background: var(--navy2); border-radius: 10px; padding: 10px 18px; }
+  .stat .num { font-size: 22px; font-weight: 800; }
+  .stat.exec .num { color: var(--accent); }
+  .stat.block .num { color: var(--red); }
+  .stat .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* Audit log */
+  #logList { max-height: 330px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+  .log-entry {
+    background: var(--navy2);
+    border-radius: 10px;
+    padding: 10px 14px;
+    border-left: 4px solid var(--muted);
+    font-size: 13px;
+    animation: slideIn .35s ease;
+  }
+  .log-entry.executed { border-left-color: var(--accent); }
+  .log-entry.blocked { border-left-color: var(--red); }
+  .log-entry .lt { font-weight: 700; }
+  .log-entry .lr { color: var(--muted); font-size: 12px; margin-top: 3px; }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(14px);} to { opacity: 1; transform: translateX(0);} }
+  .empty-hint { color: var(--muted); font-size: 13px; }
+
+  /* Sandbox */
+  #sandboxList { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+  .file-card { background: var(--navy2); border-radius: 10px; padding: 10px 14px; font-size: 13px; }
+  .file-card .fname { font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .file-card .fcontent { color: var(--muted); font-size: 12px; margin-top: 4px; font-family: 'Consolas', monospace; white-space: pre-wrap; }
+
+  /* Goal input panel */
+  .goal-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  #goalInput {
+    flex: 1;
+    min-width: 260px;
+    background: var(--navy2);
+    border: 1px solid #2a4a70;
+    border-radius: 8px;
+    color: var(--text);
+    padding: 11px 14px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  #goalInput::placeholder { color: var(--muted); }
+  #startBtn { background: var(--accent); color: #06231f; padding: 11px 22px; font-size: 14px; border-radius: 8px; }
+  #startBtn:hover { background: #3fe0cf; }
+  #startBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Error banner */
+  .error-banner {
+    background: rgba(228,87,46,0.14);
+    border: 1px solid var(--red);
+    color: #ffb199;
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 13px;
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+  .error-banner b { color: #ff8a5c; }
+
+  /* Final LLM message */
+  .final-message {
+    background: var(--navy2);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--text);
+    margin-top: 16px;
+    text-align: left;
+  }
+  .final-message .fm-label { color: var(--accent); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+
+  .thinking { text-align: center; color: var(--muted); font-size: 13px; padding: 30px 0; }
+  .thinking .dots::after { content: "…"; animation: dotpulse 1.2s steps(4) infinite; }
+  @keyframes dotpulse { 0% { content: ""; } 33% { content: "."; } 66% { content: ".."; } 100% { content: "..."; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🛡️ AI Agent Action Guardrail — LLM Live Demo</h1>
+    <div class="subtitle">A real LLM (via Ollama) decides what to do next. Every action it proposes is intercepted before it executes — you are the guardrail.</div>
+  </div>
+  <button id="restartBtn" onclick="restart()">↻ Reset</button>
+</header>
+
+<div class="panel" style="margin-bottom:22px;">
+  <h2>Agent's Goal</h2>
+  <div class="goal-row">
+    <input id="goalInput" type="text" placeholder="e.g. Review the sandbox files and clean up anything unnecessary, then email a summary to finance-team@example.com" />
+    <button id="startBtn" onclick="startDemo()">▶ Start Agent</button>
+  </div>
+</div>
+
+<div id="errorBanner"></div>
+
+<div class="pipeline">
+  <div class="stage" id="stage-propose">
+    <div class="icon">🤖</div>
+    <div class="label">Agent Proposes</div>
+    <div class="sub">decides next action</div>
+  </div>
+  <div class="arrow">➜</div>
+  <div class="stage" id="stage-intercept">
+    <div class="icon">⏸️</div>
+    <div class="label">Interceptor Pauses</div>
+    <div class="sub">execution halted</div>
+  </div>
+  <div class="arrow">➜</div>
+  <div class="stage" id="stage-decide">
+    <div class="icon">⚖️</div>
+    <div class="label">Guardrail Decision</div>
+    <div class="sub">allow / block</div>
+  </div>
+  <div class="arrow">➜</div>
+  <div class="stage" id="stage-execute">
+    <div class="icon">⚡</div>
+    <div class="label">Action Resolved</div>
+    <div class="sub">executed or blocked</div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="panel">
+    <h2>Current Action</h2>
+    <div id="actionArea"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Audit Log</h2>
+    <div id="logList"><div class="empty-hint">No actions yet — click Restart Demo to begin.</div></div>
+  </div>
+</div>
+
+<div style="height:22px"></div>
+
+<div class="panel">
+  <h2>Sandbox Files (live filesystem state)</h2>
+  <div id="sandboxList"></div>
+</div>
+
+<script>
+const ICONS = { read_file: "📄", delete_file: "🗑️", send_email: "✉️" };
+const RISKY = { read_file: false, delete_file: true, send_email: true };
+
+function setStage(id, cls) {
+  const el = document.getElementById(id);
+  el.classList.remove("active", "pass", "block");
+  if (cls) el.classList.add(cls);
+}
+function resetStages() {
+  ["stage-propose","stage-intercept","stage-decide","stage-execute"].forEach(id => setStage(id, null));
+}
+
+function showError(msg) {
+  document.getElementById("errorBanner").innerHTML =
+    `<div class="error-banner"><b>⚠ Error:</b> ${msg}</div>`;
+}
+function clearError() {
+  document.getElementById("errorBanner").innerHTML = "";
+}
+
+function restart() {
+  resetStages();
+  clearError();
+  document.getElementById("logList").innerHTML = '<div class="empty-hint">No actions yet — set a goal and click Start Agent.</div>';
+  document.getElementById("actionArea").innerHTML = '<div class="empty-hint" style="text-align:center;">Waiting to start…</div>';
+  document.getElementById("sandboxList").innerHTML = "";
+  document.getElementById("startBtn").disabled = false;
+}
+
+async function startDemo() {
+  clearError();
+  resetStages();
+  document.getElementById("startBtn").disabled = true;
+  document.getElementById("logList").innerHTML = '<div class="empty-hint">No actions yet…</div>';
+  document.getElementById("actionArea").innerHTML = '<div class="thinking">🤖 Agent is thinking<span class="dots"></span></div>';
+
+  const goal = document.getElementById("goalInput").value.trim();
+  let res, data;
+  try {
+    res = await fetch("/api/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ goal: goal || undefined })
+    });
+    data = await res.json();
+  } catch (e) {
+    showError("Could not reach the backend. Is the Flask app running?");
+    document.getElementById("startBtn").disabled = false;
+    return;
+  }
+
+  if (!res.ok) {
+    showError(data.error || "Unknown error starting the agent.");
+    document.getElementById("actionArea").innerHTML = "";
+    document.getElementById("startBtn").disabled = false;
+    return;
+  }
+
+  render(data);
+  loadSandbox();
+}
+
+async function decide(choice) {
+  setStage("stage-decide", "active");
+  document.getElementById("allowBtn").disabled = true;
+  document.getElementById("blockBtn").disabled = true;
+
+  // brief flash on execute stage, then show "thinking" while the LLM's
+  // next-step call is in flight (this fetch IS the LLM inference time)
+  setStage("stage-execute", choice === "allow" ? "pass" : "block");
+  await new Promise(r => setTimeout(r, 500));
+  document.getElementById("actionArea").innerHTML = '<div class="thinking">🤖 Agent is thinking<span class="dots"></span></div>';
+
+  let res, data;
+  try {
+    res = await fetch("/api/decide", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision: choice })
+    });
+    data = await res.json();
+  } catch (e) {
+    showError("Lost connection to the backend mid-session.");
+    return;
+  }
+
+  if (!res.ok) {
+    showError(data.error || "Unknown error getting the agent's next step.");
+    return;
+  }
+
+  render(data);
+  loadSandbox();
+}
+
+function render(data) {
+  renderLog(data.log);
+
+  if (data.pending) {
+    resetStages();
+    setStage("stage-propose", "active");
+    setTimeout(() => { setStage("stage-propose", null); setStage("stage-intercept", "active"); }, 450);
+
+    const tool = data.pending.tool;
+    const risky = RISKY[tool];
+    document.getElementById("actionArea").innerHTML = `
+      <div style="text-align:center;">
+        <span class="risky-badge ${risky ? 'risky' : 'safe'}">${risky ? '⚠ POTENTIALLY RISKY' : '✓ LOW RISK'}</span>
+      </div>
+      <div class="action-icon">${ICONS[tool] || "🔧"}</div>
+      <div class="action-tool">${tool}(...)</div>
+      <div class="action-args">${JSON.stringify(data.pending.args)}</div>
+      <div class="btn-row">
+        <button id="allowBtn" onclick="decide('allow')">✅ Allow</button>
+        <button id="blockBtn" onclick="decide('block')">⛔ Block</button>
+      </div>`;
+  } else {
+    resetStages();
+    document.getElementById("startBtn").disabled = false;
+    const executed = data.log.filter(e => e.outcome === "EXECUTED").length;
+    const blocked = data.log.filter(e => e.outcome === "BLOCKED").length;
+    const finalMsg = data.final_message
+      ? `<div class="final-message"><div class="fm-label">Agent's closing summary</div>${escapeHtml(data.final_message)}</div>`
+      : "";
+    document.getElementById("actionArea").innerHTML = `
+      <div class="done-box">
+        <div class="big">✅</div>
+        <div style="font-size:18px;font-weight:700;">Session Complete</div>
+        <div style="color:var(--muted);font-size:13px;margin-top:4px;">The agent has finished working toward its goal.</div>
+        <div class="stat-row">
+          <div class="stat exec"><div class="num">${executed}</div><div class="lbl">EXECUTED</div></div>
+          <div class="stat block"><div class="num">${blocked}</div><div class="lbl">BLOCKED</div></div>
+        </div>
+        ${finalMsg}
+      </div>`;
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function renderLog(log) {
+  const el = document.getElementById("logList");
+  if (!log.length) { el.innerHTML = '<div class="empty-hint">No actions yet…</div>'; return; }
+  el.innerHTML = log.slice().reverse().map(e => `
+    <div class="log-entry ${e.outcome === 'EXECUTED' ? 'executed' : 'blocked'}">
+      <div class="lt">${ICONS[e.tool] || "🔧"} ${e.tool} — ${e.outcome}</div>
+      <div class="lr">${e.result}</div>
+    </div>
+  `).join("");
+}
+
+async function loadSandbox() {
+  const res = await fetch("/api/sandbox");
+  const files = await res.json();
+  const el = document.getElementById("sandboxList");
+  const names = Object.keys(files);
+  if (!names.length) { el.innerHTML = '<div class="empty-hint">Sandbox is empty.</div>'; return; }
+  el.innerHTML = names.map(name => `
+    <div class="file-card">
+      <div class="fname">📄 ${name}</div>
+      <div class="fcontent">${files[name]}</div>
+    </div>
+  `).join("");
+}
+
+restart();
+</script>
+</body>
+</html>
